@@ -5,6 +5,7 @@ import { User, UserDocument } from './schemas/user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
 import * as bcrypt from 'bcrypt';
 import { FileService, FileType } from '../file/file.service';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UserService {
@@ -34,6 +35,59 @@ export class UserService {
       ...createUserDto,
       password: hash,
     });
+  }
+
+  async update(
+    id: ObjectId,
+    updateUserDto: UpdateUserDto,
+    picture?: Express.Multer.File,
+  ): Promise<User> {
+    if (picture) {
+      const user = await this.userModel.findById(id);
+      if (user.picture) this.fileService.removeFile(user.picture);
+
+      updateUserDto.picture = this.fileService.createFile(
+        FileType.IMAGE,
+        picture,
+      );
+    }
+
+    if (updateUserDto.password) {
+      const salt = await bcrypt.genSalt();
+      updateUserDto.password = await bcrypt.hash(updateUserDto.password, salt);
+    }
+
+    return this.userModel.findByIdAndUpdate(
+      id,
+      {
+        $set: {
+          ...updateUserDto,
+        },
+      },
+      { new: true },
+    );
+  }
+
+  async getAll(limit = 10, offset = 0, query = ''): Promise<User[]> {
+    const filter = {
+      name: { $regex: new RegExp(query, 'i') },
+    };
+    return (
+      this.userModel
+        .find(filter)
+        // .populate({
+        //   path: 'tracks',
+        //   populate: {
+        //     path: 'comments',
+        //   },
+        // })
+        .skip(offset)
+        .limit(limit)
+    );
+  }
+
+  async getOne(id: ObjectId): Promise<User> {
+    return this.userModel.findById(id);
   }
 
   async delete(id: ObjectId): Promise<User> {
